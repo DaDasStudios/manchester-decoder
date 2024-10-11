@@ -25,11 +25,18 @@ int firstHalf, secondHalf;
 unsigned long prevMicros, currentMicros;
 int offset;
 
+// * Additional pins
+#define HEX_BIN_PIN 13
+
+// Allow to toggle the base format
+bool showHex = true;
+
 void setup()
 {
   // If you want to use Serial communication
   Serial.begin(BAUD_RATE);
   pinMode(MANCHESTER_PIN, INPUT);
+  pinMode(HEX_BIN_PIN, INPUT);
 
   // Welcome message
   lcd.begin(16, 2);
@@ -43,6 +50,11 @@ void setup()
 
 void loop()
 {
+  decodeSignal();
+}
+
+void decodeSignal()
+{
   // Reset the output before processing a new signal
   decodedOutput = 0;
 
@@ -53,14 +65,19 @@ void loop()
 
   // Bloquear el funcionamiento hasta que no haya un cambio en el pin de entrada
   // ! It's mandatory to use `digitalRead(MANCHESTER_PIN)` in order to reat the value on the fly
-  while (digitalRead(MANCHESTER_PIN) == HIGH);
+  while (digitalRead(MANCHESTER_PIN) == HIGH)
+  {
+    // Button to allow to toggle to display between binary and hex format
+    showHex = digitalRead(HEX_BIN_PIN) == HIGH;
+  }
 
   // Once the initial change is detected, wait until the next change
   delayMicroseconds(HALF_TE + 50); // Delay to avoid problems
   delayMicroseconds(HALF_TE);
-  
+
   // ? Start to decode data
-  for (int i = 0; i < NUM_BITS; i++){
+  for (int i = 0; i < NUM_BITS; i++)
+  {
     // Read the first half
     firstHalf = digitalRead(MANCHESTER_PIN);
 
@@ -80,16 +97,19 @@ void loop()
     if (firstHalf == HIGH && secondHalf == LOW)
     {
       decodedOutput |= 0;
-    } else if (firstHalf == LOW && secondHalf == HIGH)
+    }
+    else if (firstHalf == LOW && secondHalf == HIGH)
     {
       decodedOutput |= 1;
-    } else {
+    }
+    else
+    {
       lcd.clear();
       lcd.print("Invalid input");
       delay(1000);
       return;
     }
-    
+
     // Save the time passed since the last save operation and compensate it in the delayMicroseconds() function, so that the program never overlaps with a unwanted signal half
     currentMicros = micros();
     offset = currentMicros - prevMicros;
@@ -99,17 +119,65 @@ void loop()
     prevMicros = currentMicros;
   }
 
-  // Mostrar el byte decodificado en la pantalla LCD
+  // Show in the LCD the decoded output
   showInLCD(decodedOutput);
-  // Espera un poco antes de decodificar otro byte
   delay(TIME_BETWEEN_SIGNALS);
 }
 
 void showInLCD(unsigned long data)
 {
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Binary: ");
-  lcd.setCursor(0, 1);
-  lcd.print(data, BIN);
+  if (showHex)
+  {
+    // Decode the parts of a DALI forward frame: YAAAAAASCCCCCCCC
+    unsigned long command = data & 0xFF;
+    unsigned long S = (data >> 8) & 0x1;
+    unsigned long address = (data >> 9) & 0x3F;
+    unsigned long Y = (data >> 15) & 0x1;
+
+    lcd.setCursor(0, 0);
+    lcd.print("YAASCC");
+    lcd.setCursor(0, 1);
+    lcd.print(Y, BIN);
+
+    // Print a 0 to keep things lined up
+    if (address < 16)
+    {
+      lcd.print("0");
+    }
+    lcd.print(address, HEX);
+    lcd.print(S, BIN);
+    if (command < 16)
+    {
+      lcd.print("0");
+    }
+    lcd.print(command, HEX);
+  }
+  else
+  {
+    lcd.setCursor(0, 0);
+    lcd.print("YAAAAAASCCCCCCCC");
+
+    // Print the less significant zeros
+    lcd.setCursor(0, 1);
+    int count = countBits(data);
+    for (int i = 0; i < NUM_BITS - count; i++)
+    {
+      lcd.print("0");
+    }
+    
+    // Print the rest of the bits
+    lcd.print(data, BIN);
+  }
+}
+
+unsigned int countBits(unsigned int n)
+{
+  unsigned int count = 0;
+  while (n)
+  {
+    count++;
+    n >>= 1;
+  }
+  return count;
 }

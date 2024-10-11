@@ -5,7 +5,7 @@
 // The half of a bit duration (period/2)
 #define HALF_TE 417
 // Number of bits expected to be decoded
-#define NUM_BITS 16
+#define NUM_BITS 8
 // Input pin for the input manchester signal
 #define MANCHESTER_PIN 7
 // Time in milliseconds to wait after a signal decodification

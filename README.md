@@ -1,57 +1,60 @@
-# Manchester receptor
-A simple implementation of a manchester receptor with Arduino and a LCD screen.
+# DALI Receptor
+Code to see your DALI forward frame in a LCD screen 2x16
 
 ## Prerequisites
 * LCD Screen 2x16 and the LiquidCrystal library
+* Push button
+* 10K resistors
 * Manchester transmitter device (can use another Arduino)
 * Wires
+* Having understand the simple _Manchester receptor_ in the __main__ branch
 
 ## Usage
-Set the initial constants according to your needs. By default, the values are the shown below.
+Now the `NUM_BITS = 16` because a DALI forward frame contains 16 bits. The time between flanks must be 416.67 microseconds (`HALF_TE`). Finally, in reality, the time between consecutive forward frames must be at least 9.17ms (`TIME_BETWEEN_SIGNALS`) but this wasn't changed in because the transmitter was setup to send signals each 1000 ms. 
 ```C
 #define BAUD_RATE 9600
 // The half of a bit duration (period/2)
 #define HALF_TE 417
 // Number of bits expected to be decoded
-#define NUM_BITS 8
+#define NUM_BITS 16
 // Input pin for the input manchester signal
 #define MANCHESTER_PIN 7
 // Time in milliseconds to wait after a signal decodification
 #define TIME_BETWEEN_SIGNALS 800
 ```
-### LCD
-The code is for educational purposes, so one of the best ways to test this code is using a circuits simulator like __Proteus__ or others. In that case, watching the serial monitor isn't possible, so I decided to include a LCD screen 2x16. 
+### Push button for toggling LCD format
+A push button was introduced to see the signal decoded either in binary or hexadecimal format. By default (LOW state) the controller will assume a BIN format. If you want to change to hexa, just hold pressed the push button the time you want to see it. 
+
+Introducing toggling by just a press is kind of hard in this code, since you need to guarantee the current timings but in this way you'll to prevent bouncing with delays. That's the reason because button detection is inside the following part of code:
+
+```ino
+while (digitalRead(MANCHESTER_PIN) == HIGH)
+{
+  // Button to allow to toggle to display between binary and hex format
+  showHex = digitalRead(HEX_BIN_PIN) == HIGH;
+}
+```
 
 
 ## Example
-Let's say we want to detect the 16 bits signal shown in the figure below
+The DALI documentation specifies that the signal must follow this format:
+
+![DALI forward frame](/images/dali-forward-frame.png)
+
+![Forward frame description](/images/forward-frame-description.png)
+
+Let's say we want to send `Y-AAAAAA-S-CCCCCCCC = 0-011010-0-00010000`(the same signal shown in the main branch). In hexa the parts become:
+* `Y = 0x00`
+* `AA = 0x01A`
+* `S = 0x00`
+* `CC = 0x010`
 
 ![Input signal](/images/input-signal.png)
 
-Decoding the signal manually we get `0011-0100-0001-0000` without including the start bit.
+Since the left-zeros aren't printed out in the simple version, there's a code portion that includes those zeros in order to keep the format. 
 
-In the simulator we can see the signal decoded successfully. The zeros at the left are not printed:
+![alt text](/images/simulation-binary.png)
 
-![Simulation](/images/simulation.png)
+In the other hand, by pressing the push button the signal is now displayed in hexadecimal format.
 
-
-
-## Common problems
-### VSCode intellisense errors 
-If you're using VSCode and the Arduino community extension, you'll probably will have problems with the intelissense and the `LiquidCrystal` library. My solution was including manually the LiquidCrystal library in the `c_cpp_properties.json` file:
-
-```
-C:\\Users\\$YOUR_``USER\\Documents\\Arduino\\libraries\\LiquidCrystal\\src
-```
-
-I didn't use the path at Appdata/Arduino15/... because it didn't work, how ever you can try it.
-
-### "Invalid input" or unexpected outputs
-
-During the development of this code I had several problems with the decoding code section, the program printed out unexpected binaries. The main reason was the timings between the intructions, the delays reached a point where the program overlaped the the second half of the period signal, so it decoded the binary wrong. 
-
-To solve that, I had to include the time compensation with the `micros()` function as you'll see in the code. So, in theory, you shouldn't get any misconvertions in your signals. However, if you keep getting a different signal from you're sending, __try to change the initial time compensation at `Manchester_Receptor.ino` which is the following line:__
-
-```C
-  delayMicroseconds(HALF_TE + 50); // Delay to avoid problems
-```
+![alt text](/images/simulation-hex.png)
